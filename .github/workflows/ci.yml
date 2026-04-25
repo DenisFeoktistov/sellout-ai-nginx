@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+env:
+  IMAGE_NAME: sellout-ai-nginx-ci
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t "$IMAGE_NAME" .
+
+      - name: Prepare dummy TLS secrets
+        run: |
+          mkdir -p smoke-secrets
+          openssl req -x509 -nodes -newkey rsa:2048 \
+            -keyout smoke-secrets/ssl_certificate_key \
+            -out smoke-secrets/ssl_certificate \
+            -subj "/CN=localhost" \
+            -days 1
+
+      - name: Validate nginx config
+        run: |
+          docker run --rm \
+            --add-host sellout-ai-backend:127.0.0.1 \
+            --add-host sellout-mail:127.0.0.1 \
+            --add-host sellout-ai-frontend:127.0.0.1 \
+            -v "$PWD/smoke-secrets:/run/secrets:ro" \
+            "$IMAGE_NAME" nginx -t
